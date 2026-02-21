@@ -18,7 +18,7 @@ These rules are intentionally strict to preserve reliability, security, maintain
 ## Architecture and Separation of Concerns
 
 - Keep transport layers thin (controllers/routes/handlers): parse input, call service, map response, return.
-- Put business rules in services/domain modules, not controllers, templates, or ORM models.
+- Put business rules in services/domain modules, not controllers, templates, or data-access plumbing.
 - Keep data access behind explicit repository/data modules.
 - Keep external integrations (queues, HTTP clients, storage) behind adapter interfaces.
 - Prefer composition and factory-style construction over deep inheritance.
