@@ -11,9 +11,10 @@ These rules are intentionally strict to preserve reliability, security, maintain
   1. architecture and separation-of-concerns boundaries,
   2. event-loop and latency safety rules,
   3. async and deterministic error-handling contracts,
-  4. security and data-handling constraints,
-  5. mandatory rationale-focused code comments,
-  6. validation/test execution expectations before merge.
+  4. resilience rules (circuit breaker, retry, error differentiation),
+  5. security and data-handling constraints,
+  6. mandatory rationale-focused code comments,
+  7. validation/test execution expectations before merge.
 
 ## Architecture and Separation of Concerns
 
@@ -49,6 +50,50 @@ In code that executes per request/job/event under traffic:
 - Avoid “sometimes sync, sometimes async” callback timing.
 - Surface errors through one deterministic path (throw/reject or callback(err), not multiple).
 - Centralize error-to-HTTP/protocol mapping and keep status code semantics consistent.
+
+### Error Differentiation
+
+Classify every error at the point it is caught or created:
+
+- **Transient** (network timeout, 502/503, rate-limit): safe to retry.
+- **Permanent** (400 validation, 404 not-found, schema mismatch): fail immediately; retrying will not help.
+- **Upstream / dependency** (third-party outage, queue unavailable): route through circuit breaker; may need fallback.
+- **Internal / bug** (null-ref, assertion, invariant violation): fail fast, alert, do not retry.
+
+Propagate the classification through the error object or a wrapper so callers can branch on category, not on string matching or status-code guessing.
+WHY: undifferentiated “catch-all → retry” masks permanent failures and wastes resources on hopeless retries.
+
+## Resilience and Failure Handling
+
+### Circuit Breaker
+
+When calling any external dependency (HTTP service, database, queue, third-party API):
+
+- Track consecutive failure counts or error-rate windows.
+- **Open** the circuit (reject calls immediately with a descriptive error) when the failure threshold is breached.
+- **Half-open** after a cooldown period: allow a single probe request to test recovery.
+- **Close** the circuit when the probe succeeds.
+- Log every state transition with dependency name, threshold, and window size.
+- WHY: without circuit breakers a single downstream outage cascades into thread/connection exhaustion across the entire system.
+
+### Retry Behavior
+
+Retries are only appropriate for **transient** errors (see Error Differentiation above).
+
+- Use exponential backoff with jitter; never use fixed-interval or immediate retries under load.
+- Cap retries with a hard maximum (recommend ≤ 3 for synchronous paths, configurable for async/worker paths).
+- Ensure the operation is **idempotent** before enabling retries; if it is not, do not retry.
+- Set a per-attempt timeout that is shorter than the overall request budget.
+- Emit a metric or structured log on every retry attempt (attempt number, delay, error category).
+- After final retry exhaustion, surface a clear terminal error—do not silently swallow.
+- WHY: uncontrolled retries amplify load during outages (“retry storm”) and violate latency budgets.
+
+### Fallback and Graceful Degradation
+
+- When a dependency is unavailable and a circuit is open, prefer returning a degraded response (cached data, default value, feature toggle off) over a hard failure when the business context allows it.
+- Document which paths support degradation and what the degraded behavior is.
+- Never silently degrade without logging; operators must know the system is running in reduced mode.
+- WHY: users tolerate stale or partial data better than complete outages.
 
 ## Security Baseline
 
@@ -116,10 +161,13 @@ For every non-trivial change, reviewers/agents must verify:
 1. No blocking sync APIs introduced in hot paths.
 2. No async consistency regressions.
 3. Error handling is deterministic and policy-aligned.
-4. Security validation is present at boundaries.
-5. Logging is useful, structured, and not throughput-dominant.
-6. Docs/tests updated with behavior changes.
-7. Rationale comments exist where decisions are non-obvious.
+4. Errors are classified (transient/permanent/upstream/internal) and routed accordingly.
+5. External calls use circuit breakers or document why they are exempt.
+6. Retries are idempotent, bounded, and use backoff with jitter.
+7. Security validation is present at boundaries.
+8. Logging is useful, structured, and not throughput-dominant.
+9. Docs/tests updated with behavior changes.
+10. Rationale comments exist where decisions are non-obvious.
 
 ## Exception Process
 
