@@ -61,7 +61,7 @@ Classify every error at the point it is caught or created:
 - **Internal / bug** (null-ref, assertion, invariant violation): fail fast, alert, do not retry.
 
 Propagate the classification through the error object or a wrapper so callers can branch on category, not on string matching or status-code guessing.
-WHY: undifferentiated “catch-all → retry” masks permanent failures and wastes resources on hopeless retries.
+- WHY: undifferentiated “catch-all → retry” masks permanent failures and wastes resources on hopeless retries.
 
 ## Resilience and Failure Handling
 
