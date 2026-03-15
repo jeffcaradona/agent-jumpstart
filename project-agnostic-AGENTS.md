@@ -1,97 +1,190 @@
 # AGENTS.md — Enterprise Baseline (Project-Agnostic)
 
-## Authority
-thisFile IS canonicalSource for contributorBehavior
-shorterInstructionFile MUST_NOT weaken|contradict thisFile
-condensedFile MUST_RETAIN architectureBoundaries,asyncContracts,errorClassification,circuitBreaker,security,rationale,testGates
+This document defines default engineering constraints for AI agents and human contributors.
+These rules are intentionally strict to preserve reliability, security, maintainability, and performance.
 
-## Architecture
-transport MUST_BE thin ; parse+call+map+return ONLY
-businessRules MUST_RESIDE_IN services|domain ; NOT controllers|templates|dataAccess
-dataAccess MUST_BE_BEHIND repository|dataModule
-externalIntegrations MUST_BE_BEHIND adapterInterface
-construction PREFER composition|factory OVER deepInheritance
+## Authority and Scope
 
-## Performance
-hotPath MUST_NOT use blockingSyncAPIs|unboundedLoops|expensiveSerializationPerRequest
-hotPath MUST_USE asyncAPIs|boundedWorkUnits|streaming|workers|inputSizeGuardrails
+- This file is the canonical source for contributor behavior.
+- Any shorter instruction file (for IDE assistants, bots, etc.) MUST NOT weaken or contradict this file.
+- If guidance is condensed, it must still explicitly retain:
+  1. architecture and separation-of-concerns boundaries,
+  2. event-loop and latency safety rules,
+  3. async and deterministic error-handling contracts,
+  4. resilience rules (circuit breaker, retry, error differentiation),
+  5. security and data-handling constraints,
+  6. mandatory rationale-focused code comments,
+  7. validation/test execution expectations before merge.
+
+## Architecture and Separation of Concerns
+
+- Keep transport layers thin (controllers/routes/handlers): parse input, call service, map response, return.
+- Put business rules in services/domain modules, not controllers, templates, or data-access plumbing.
+- Keep data access behind explicit repository/data modules.
+- Keep external integrations (queues, HTTP clients, storage) behind adapter interfaces.
+- Prefer composition and factory-style construction over deep inheritance.
+- WHY: strict layering improves testability, change isolation, and incident debugging speed.
+
+## Performance and Concurrency Guardrails
+
+### Non-negotiable hot-path rule
+
+In code that executes per request/job/event under traffic:
+
+- Do NOT use blocking sync APIs for filesystem, subprocess, compression, or crypto.
+- Do NOT run unbounded or size-unaware loops.
+- Do NOT perform expensive serialization, traversal, or template compilation repeatedly per request.
+
+### Required alternatives
+
+- Use async APIs and bounded work units.
+- Cache immutable/rarely-changing artifacts when safe.
+- Use streaming for large payloads.
+- Move expensive CPU work to workers/queues/precompute stages.
+- Add input-size guardrails and timeouts.
 
 ## Async and Error Contracts
-publicAPIs SHOULD_BE consistently async
-errorSurface MUST_USE one deterministic path ; NOT multiple
-errorMapping MUST_BE centralized
 
-## Error Classification
-transient CLASSIFY_AS networkTimeout|502|503|rateLimit → retry
-permanent CLASSIFY_AS 400validation|404|schemaMismatch → failImmediate ; noRetry
-upstream CLASSIFY_AS thirdPartyOutage|queueUnavailable → circuitBreaker
-internal CLASSIFY_AS nullRef|assertion|invariant → failFast,alert,noRetry
-error MUST_CARRY classification ; callers branch on category NOT stringMatch|statusCode
+- Public APIs should be consistently async when async work is possible.
+- Never mix callback and Promise completion paths in ways that can double-complete.
+- Avoid “sometimes sync, sometimes async” callback timing.
+- Surface errors through one deterministic path (throw/reject or callback(err), not multiple).
+- Centralize error-to-HTTP/protocol mapping and keep status code semantics consistent.
 
-## Circuit Breaker
-externalDependency MUST_TRACK failureCount|errorRateWindow
-circuit OPEN_WHEN failureThreshold breached ; reject immediately
-circuit HALF_OPEN_AFTER cooldownPeriod ; allow singleProbe
-circuit CLOSE_WHEN probe succeeds
-circuitTransition MUST_LOG dependencyName,threshold,window
+### Error Differentiation
 
-## Retry
-retry ONLY_FOR transient errors
-retry MUST_USE exponentialBackoff+jitter ; NOT fixedInterval|immediateUnderLoad
-retry MAX 3 on syncPaths ; configurable on asyncPaths
-retry REQUIRES idempotentOperation
-retry MUST_LOG attemptNumber,delay,errorCategory
-retry.exhausted MUST surface clearTerminalError ; NOT swallow
+Classify every error at the point it is caught or created:
 
-## Fallback
-dependency.unavailable PREFER degradedResponse(cached|default|featureOff) OVER hardFailure
-degradation MUST_LOG ; NOT silent
+- **Transient** (network timeout, 502/503, rate-limit): safe to retry.
+- **Permanent** (400 validation, 404 not-found, schema mismatch): fail immediately; retrying will not help.
+- **Upstream / dependency** (third-party outage, queue unavailable): route through circuit breaker; may need fallback.
+- **Internal / bug** (null-ref, assertion, invariant violation): fail fast, alert, do not retry.
 
-## Security
-untrustedInput MUST validate+normalize at boundaries
-enumFields MUST_USE allowlists ; strictSchemaValidation for payloads
-dbOperations MUST_USE parameterized|approvedQueryLayers
-clientErrors MUST_NOT leak internals
-secrets MUST_NOT appear in logs|source ; use envVar|secretManager
-serviceCredentials MUST_APPLY leastPrivilege
+Propagate the classification through the error object or a wrapper so callers can branch on category, not on string matching or status-code guessing.
+- WHY: undifferentiated “catch-all → retry” masks permanent failures and wastes resources on hopeless retries.
 
-## Logging
-logs MUST_BE structured ; NOT freeFormStrings on hotPaths
-verbosity MUST_BE gated by level
-logs MUST_INCLUDE correlationId,latency,statusOutcome
-metrics EMIT throughput,errorRate,latency,saturation
+## Resilience and Failure Handling
 
-## Code Comments
-comments DEFAULT rationale(WHY) ; NOT mechanics(what)
-nonTrivialBlocks REQUIRE WHY comment
-format: `WHY:<rationale> / TRADEOFF:<downside> / VERIFY_IF_CHANGED:<retest>`
+### Circuit Breaker
 
-## Docs Sync
-publicBehaviorChange REQUIRES README+devDocs+runbooks+changelog updated
-exampleSnippets MUST_EXECUTE against current code
+When calling any external dependency (HTTP service, database, queue, third-party API):
 
-## Testing Gates
-merge REQUIRES lintPass,unitTests(coreLogic+errorPaths),integrationTests(boundary+criticalWorkflows)
-concurrencySensitiveChange REQUIRES stress|race|orderingValidation
-skippedCheck MUST_DOCUMENT why,risk,followUpOwner+date
+- Track consecutive failure counts or error-rate windows.
+- **Open** the circuit (reject calls immediately with a descriptive error) when the failure threshold is breached.
+- **Half-open** after a cooldown period: allow a single probe request to test recovery.
+- **Close** the circuit when the probe succeeds.
+- Log every state transition with dependency name, threshold, and window size.
+- WHY: without circuit breakers a single downstream outage cascades into thread/connection exhaustion across the entire system.
+
+### Retry Behavior
+
+Retries are only appropriate for **transient** errors (see Error Differentiation above).
+
+- Use exponential backoff with jitter; never use fixed-interval or immediate retries under load.
+- Cap retries with a hard maximum (recommend ≤ 3 for synchronous paths, configurable for async/worker paths).
+- Ensure the operation is **idempotent** before enabling retries; if it is not, do not retry.
+- Set a per-attempt timeout that is shorter than the overall request budget.
+- Emit a metric or structured log on every retry attempt (attempt number, delay, error category).
+- After final retry exhaustion, surface a clear terminal error—do not silently swallow.
+- WHY: uncontrolled retries amplify load during outages (“retry storm”) and violate latency budgets.
+
+### Fallback and Graceful Degradation
+
+- When a dependency is unavailable and a circuit is open, prefer returning a degraded response (cached data, default value, feature toggle off) over a hard failure when the business context allows it.
+- Document which paths support degradation and what the degraded behavior is.
+- Never silently degrade without logging; operators must know the system is running in reduced mode.
+- WHY: users tolerate stale or partial data better than complete outages.
+
+## Security Baseline
+
+- Validate and normalize all untrusted input at boundaries.
+- Enforce allowlists for enum-like fields and strict schema validation for payloads.
+- Use parameterized DB operations / approved query layers only.
+- Never leak internals in client-facing errors.
+- Keep secrets out of logs and source; use environment/secret manager integration.
+- Apply least privilege for service credentials and external access.
+- WHY: most severe incidents are input-validation and data-exposure failures.
+
+## Logging and Observability
+
+- Use structured logs (JSON/fields), not ad-hoc free-form strings on hot paths.
+- Gate verbosity by level and avoid expensive log payload construction when dropped.
+- Include correlation/request IDs, latency, and status outcome where relevant.
+- Emit metrics/events for throughput, error rate, latency, and saturation.
+
+## Code Commenting Standard (Mandatory)
+
+Default to documenting rationale (why), not mechanics (what).
+
+- Do NOT add comments that simply narrate obvious code.
+- DO add comments for non-trivial decisions, fallback behavior, edge cases, security choices, and performance tradeoffs.
+- For non-trivial blocks, include at least one WHY-comment.
+
+Preferred format:
+
+```text
+WHY: <constraint/rationale>
+TRADEOFF: <accepted downside>
+VERIFY IF CHANGED: <what must be re-tested>
+```
+
+## Documentation Sync Rules
+
+When changing public behavior, interfaces, package boundaries, configuration, deployment, or operational runbooks:
+
+1. Update user-facing README/API docs.
+2. Update developer docs/architecture notes.
+3. Update operational docs (runbooks, env vars, migration notes).
+4. Update changelog/release notes where applicable.
+5. Verify example snippets still execute against current code.
+
+## Testing and Quality Gates
+
+Minimum expectation before merge:
+
+- Lint/format checks pass.
+- Unit tests cover core logic and error paths.
+- Integration tests cover boundary behavior and critical workflows.
+- Any concurrency-sensitive changes include stress/race/ordering validation where practical.
+- New public behaviors include tests and docs.
+
+If a check is intentionally skipped, document:
+
+- why it was skipped,
+- impact and risk,
+- follow-up owner/date.
 
 ## Review Checklist
-1. noBlockingSyncAPIs in hotPaths
-2. noAsyncConsistencyRegressions
-3. errorHandling deterministic+policyAligned
-4. errorsClassified(transient|permanent|upstream|internal)
-5. externalCalls use circuitBreaker OR documented exempt
-6. retries idempotent+bounded+backoffWithJitter
-7. securityValidation at boundaries
-8. logging useful+structured+notThroughputDominant
-9. docs+tests updated with behaviorChanges
-10. rationaleComments where nonObvious
+
+For every non-trivial change, reviewers/agents must verify:
+
+1. No blocking sync APIs introduced in hot paths.
+2. No async consistency regressions.
+3. Error handling is deterministic and policy-aligned.
+4. Errors are classified (transient/permanent/upstream/internal) and routed accordingly.
+5. External calls use circuit breakers or document why they are exempt.
+6. Retries are idempotent, bounded, and use backoff with jitter.
+7. Security validation is present at boundaries.
+8. Logging is useful, structured, and not throughput-dominant.
+9. Docs/tests updated with behavior changes.
+10. Rationale comments exist where decisions are non-obvious.
 
 ## Exception Process
-exception REQUIRES justification: why,whySaferAltsNotUsed,scope+blastRadius,verificationPerformed+rollbackPlan
+
+Exceptions are allowed only when explicitly documented in code review/PR notes:
+
+- Why the exception is needed.
+- Why safer alternatives were not used.
+- Scope and blast radius (startup-only, low-frequency admin path, etc.).
+- Verification performed and rollback plan.
 
 ## Agent Delivery Contract
-1. summarize changes+why
-2. report validationCommands+outcomes
-3. callOut knownLimitations|followUpWork
-4. state constraints ; NO hiddenAssumptions
+
+Before finalizing any contribution, agents should:
+
+1. Summarize what changed and why.
+2. Report exact validation commands executed and outcomes.
+3. Call out known limitations or follow-up work.
+4. Avoid hidden assumptions; state constraints clearly.
+
+Quality and safety take priority over speed.
