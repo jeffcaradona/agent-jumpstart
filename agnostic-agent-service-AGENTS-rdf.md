@@ -4,7 +4,19 @@ agentServiceFile EXTENDS projectAgnosticBaseline
 agentServiceFile WINS_ON conflict
 
 ## Authority
-condensedFile MUST_RETAIN agentLoopSafety,toolContracts,groundingRules,inferenceResilience,sessionLifecycle,promptManagement,errorDifferentiation,security,rationale
+thisFile IS compactRepresentation of agnostic-agent-service-AGENTS-readable.md
+agnostic-agent-service-AGENTS-readable.md IS canonicalSource
+thisFile MUST_NOT weaken|contradict agnostic-agent-service-AGENTS-readable.md
+shorterInstructionFile MUST_NOT weaken|contradict agnostic-agent-service-AGENTS-readable.md
+condensedFile MUST_RETAIN agentLoopSafety
+condensedFile MUST_RETAIN toolContracts
+condensedFile MUST_RETAIN groundingRules
+condensedFile MUST_RETAIN inferenceResilience
+condensedFile MUST_RETAIN sessionLifecycle
+condensedFile MUST_RETAIN promptManagement
+condensedFile MUST_RETAIN errorDifferentiation
+condensedFile MUST_RETAIN security
+condensedFile MUST_RETAIN rationale
 
 ## Architecture
 entryPoint(index.js) HANDLES acceptInput,startSession,callAgent,returnResult ; NO businessLogic
