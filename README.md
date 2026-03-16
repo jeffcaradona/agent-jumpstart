@@ -4,7 +4,7 @@
 
 ## Readable (Canonical) Versions
 
-GPT 5.x Estimate:
+GPT-4o Estimate:
 - Tokens: 1,732
 - Characters: 8,687
 
@@ -31,7 +31,7 @@ tool.execute MUST_NOT fillMissingFields|mergeCalls|formatForModel
 
 `|` = OR, `,` = AND/list, `;` = qualifier, `→` = maps to, `+` = compound value.
 
-GPT 5.x Estimate (RDF versions):
+GPT-4o Estimate (RDF versions):
 
 | File | Tokens | Characters |
 |---|---|---|

@@ -10,6 +10,8 @@ with the baseline, this file wins.
 
 ## Authority and Scope
 
+Machine-optimized RDF compact version: `agnostic-agent-service-AGENTS-rdf.md`
+
 - This file is the canonical source for contributor behavior on this service.
 - Any shorter instruction file (for IDE assistants, bots, etc.) MUST NOT weaken or contradict this file.
 - If guidance is condensed, it must still explicitly retain:
