@@ -5,6 +5,8 @@ These rules are intentionally strict to preserve reliability, security, maintain
 
 ## Authority and Scope
 
+Machine-optimized RDF compact version: `project-agnostic-AGENTS-rdf.md`
+
 - This file is the canonical source for contributor behavior.
 - Any shorter instruction file (for IDE assistants, bots, etc.) MUST NOT weaken or contradict this file.
 - If guidance is condensed, it must still explicitly retain:

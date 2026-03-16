@@ -1,6 +1,6 @@
 # AGENTS.md — AI Agent Service
 
-agentServiceFile EXTENDS projectAgnosticBaseline
+agentServiceFile EXTENDS project-agnostic-AGENTS-rdf.md
 agentServiceFile WINS_ON conflict
 
 ## Authority
