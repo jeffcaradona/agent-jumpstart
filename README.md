@@ -2,7 +2,7 @@
 
 [OpenAI Tokenizer](https://platform.openai.com/tokenizer)
 
-## Original (Prose) Versions
+## Readable (Canonical) Versions
 
 GPT 5.x Estimate:
 - Tokens: 1,732
@@ -10,8 +10,8 @@ GPT 5.x Estimate:
 
 | File | Tokens | Characters |
 |---|---|---|
-| `project-agnostic-AGENTS.md` | ~1,737 | 8,710 |
-| `agnostic-agent-service-AGENTS.md` | ~3,454 | 17,322 |
+| `project-agnostic-AGENTS-readable.md` | ~1,737 | 8,710 |
+| `agnostic-agent-service-AGENTS-readable.md` | ~3,454 | 17,322 |
 | **Combined** | **~5,191** | **26,032** |
 
 ## RDF Triple Versions (Compact)

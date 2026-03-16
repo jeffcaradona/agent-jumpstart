@@ -1,9 +1,17 @@
 # AGENTS.md — Enterprise Baseline (Project-Agnostic)
 
 ## Authority
-thisFile IS canonicalSource for contributorBehavior
-shorterInstructionFile MUST_NOT weaken|contradict thisFile
-condensedFile MUST_RETAIN architectureBoundaries,asyncContracts,errorClassification,circuitBreaker,security,rationale,testGates
+thisFile IS compactRepresentation of project-agnostic-AGENTS-readable.md
+project-agnostic-AGENTS-readable.md IS canonicalSource
+thisFile MUST_NOT weaken|contradict project-agnostic-AGENTS-readable.md
+shorterInstructionFile MUST_NOT weaken|contradict project-agnostic-AGENTS-readable.md
+condensedFile MUST_RETAIN architectureBoundaries
+condensedFile MUST_RETAIN asyncContracts
+condensedFile MUST_RETAIN errorClassification
+condensedFile MUST_RETAIN circuitBreaker
+condensedFile MUST_RETAIN security
+condensedFile MUST_RETAIN rationale
+condensedFile MUST_RETAIN testGates
 
 ## Architecture
 transport MUST_BE thin ; parse+call+map+return ONLY
